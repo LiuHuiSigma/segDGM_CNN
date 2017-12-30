@@ -5,6 +5,7 @@ from keras.utils import np_utils
 from sklearn.feature_extraction.image import extract_patches as sk_extract_patches
 from matplotlib import pyplot as plt
 import bcolz
+import random
 
 precision_global = 'float32'
 
@@ -85,6 +86,33 @@ def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27
     return x, y
 
 
+# Random shuffle (1st dim)
+def shuffle(data, idxs = None):
+    N = len(data)
+    
+    if idxs == None:
+        idxs = list(range(N))
+        for i in range(N-1, -1, -1):
+            j = random.randint(0, i)
+            idxs[i], idxs[j] = idxs[j], idxs[i]
+    
+    idxs_target = [0] * N
+    for i, idx in enumerate(idxs):
+        idxs_target[idx] = i
+    
+    for i in range(N):
+        while i != idxs_target[i]:
+            j = idxs_target[i]
+            data[i], data[j] = data[j], data[i]
+            idxs_target[i], idxs_target[j] = idxs_target[j], idxs_target[i]
+        
+    return idxs
+        
+        
+    
+    
+    
+    
 
 # Reconstruction utils
 def generate_indexes(patch_shape, expected_shape) :
