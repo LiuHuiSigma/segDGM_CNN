@@ -38,7 +38,7 @@ def extract_patches(volume, patch_shape, extraction_step) :
     npatches = np.prod(patches.shape[:ndim])
     return patches.reshape((npatches, ) + patch_shape)
 
-def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27, 27, 27), predictor_shape=(9, 9, 9), mask=None) :
+def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27, 27, 27), predictor_shape=(9, 9, 9), mask=None):
     #patch_shape = (27, 27, 27)
     #label_selector = [slice(None)] + [slice(9, 18) for i in range(3)]
     label_selector = [slice(None)] + [slice(int((patch_shape[i]-predictor_shape[i])/2), int((patch_shape[i]-predictor_shape[i])/2+predictor_shape[i])) for i in range(3)]
@@ -49,6 +49,11 @@ def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27
     # Extract patches from input volumes and ground truth
     x = np.zeros((0, num_channel) + patch_shape, dtype=precision_global)
     y = np.zeros((0, predictor_shape[0]*predictor_shape[1]*predictor_shape[2], num_classes), dtype=precision_global)
+    if type(mask) is not type(None):
+        x_add = np.zeros((0, num_channel) + patch_shape, dtype=precision_global)
+        y_add = np.zeros((0, predictor_shape[0]*predictor_shape[1]*predictor_shape[2], num_classes), dtype=precision_global)
+        
+    
     for idx in range(len(input_vols)) :
         print(idx)
         y_length = len(y)
@@ -63,7 +68,21 @@ def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27
         if type(mask) is not type(None):
             mask_patches = extract_patches(mask[idx], patch_shape, extraction_step)
             mask_patches = mask_patches[label_selector]
-            valid_idxs = np.where((np.sum(label_patches, axis=(1, 2, 3)) != 0) | (np.sum(mask_patches, axis=(1, 2, 3)) != 0))
+            valid_idxs_add = list(set(np.where((np.sum(mask_patches, axis=(1, 2, 3)) != 0))) - set(valid_idxs))
+            
+            y_add_length = len(y_add)
+            label_patches_add = label_patches[valid_idxs_add]
+            x_add = np.vstack((x_add, np.zeros((len(label_patches_add), num_channel) + patch_shape, dtype=precision_global)))
+            y_add = np.vstack((y_add, np.zeros((len(label_patches_add), predictor_shape[0]*predictor_shape[1]*predictor_shape[2], num_classes), dtype=precision_global)))     
+            for i in range(len(label_patches_add)) :
+                y_add[i+y_add_length, :, :] = np_utils.to_categorical(label_patches_add[i, : ,: ,:], num_classes).reshape((-1, num_classes))
+            del label_patches_add
+
+            # Sampling strategy: reject samples which labels are only zero
+            for i_channel in range(num_channel):
+                input_patches_add = extract_patches(input_vols[idx, i_channel], patch_shape, extraction_step)
+                x_add[y_add_length:, i_channel, :, :, :] = input_patches_add[valid_idxs_add]
+            del input_patches_add
         
         # Filtering extracted patches
         label_patches = label_patches[valid_idxs]
@@ -83,6 +102,10 @@ def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27
             x[y_length:, i_channel, :, :, :] = input_patches[valid_idxs]
         del input_patches
 
+    if type(mask) is not type(None):
+        x = np.concatenate((x, x_add))
+        y = np.concatenate((y, y_add))
+        
     return x, y
 
 
@@ -123,7 +146,7 @@ def generate_indexes(patch_shape, expected_shape) :
 
     #idxs = [range(patch_shape[i+1], poss_shape[i] - patch_shape[i+1], patch_shape[i+1]) for i in range(ndims-1)]
     idxs = [range(9, poss_shape[i] - 9, patch_shape[i+1]) for i in range(ndims-1)]
-
+    
     return itertools.product(*idxs)
 
 def reconstruct_volume(patches, expected_shape) :
