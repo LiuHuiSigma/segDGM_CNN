@@ -68,7 +68,8 @@ def build_set(input_vols, label_vols, extraction_step=(9, 9, 9), patch_shape=(27
         if type(mask) is not type(None):
             mask_patches = extract_patches(mask[idx], patch_shape, extraction_step)
             mask_patches = mask_patches[label_selector]
-            valid_idxs_add = list(set(np.where((np.sum(mask_patches, axis=(1, 2, 3)) != 0))) - set(valid_idxs))
+            valid_idxs_mask = np.where((np.sum(mask_patches, axis=(1, 2, 3)) != 0))
+            valid_idxs_add = set2idx(idx2set(valid_idxs_mask) - idx2set(valid_idxs))
             
             y_add_length = len(y_add)
             label_patches_add = label_patches[valid_idxs_add]
@@ -133,8 +134,11 @@ def shuffle(data, idxs = None):
         
         
     
+def idx2set(data_idx):
+    return set([ tuple(map(int, y)) for y in zip(*[ x for x in data_idx ]) ])
     
-    
+def set2idx(data_set):
+    return tuple( np.asarray(y) for y in zip(*[ x for x in data_set ]))
     
 
 # Reconstruction utils
